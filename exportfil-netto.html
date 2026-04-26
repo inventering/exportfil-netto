@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>exportfil-netto</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --card-2: #1c222b;
+    --border: #2a313c;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --warn: #fbbf24;
+    --warn-bg: rgba(251, 191, 36, 0.12);
+    --danger: #f87171;
+    --danger-bg: rgba(248, 113, 113, 0.14);
+    --ok: #34d399;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 32px 16px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin: 0 0 16px; font-weight: 600; }
+  .drop {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .drop:hover, .drop.dragover { border-color: var(--accent); background: var(--card-2); }
+  .drop p { margin: 4px 0; color: var(--muted); }
+  .drop strong { color: var(--text); }
+  input[type="file"] { display: none; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+  select, input[type="number"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+    background: var(--card-2);
+    color: var(--text);
+    font-family: inherit;
+  }
+  select option { background: var(--card); color: var(--text); }
+  select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .checkbox { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  button:hover { background: var(--accent-hover); }
+  button.secondary { background: var(--card-2); color: var(--text); border: 1px solid var(--border); }
+  button.secondary:hover { background: var(--border); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .stats { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; }
+  .rules-bar { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; padding: 12px 14px; margin-bottom: 16px; background: var(--card-2); border: 1px solid var(--border); border-radius: 6px; }
+  .rules-bar .field { min-width: 120px; }
+  .rules-bar input[type="number"] { width: 110px; }
+  .stat { font-size: 14px; }
+  .stat strong { display: block; font-size: 22px; font-weight: 600; }
+  .stat .muted { color: var(--muted); font-size: 12px; }
+  .table-wrap { overflow-x: auto; max-height: 600px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--card-2); font-weight: 600; position: sticky; top: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
+  tbody tr:hover { background: var(--card-2); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; margin-right: 4px; }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+  .badge.danger { background: var(--danger-bg); color: var(--danger); }
+  .hidden { display: none !important; }
+  .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  .error { background: var(--danger-bg); color: var(--danger); padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 12px; }
+  .loading { display: flex; align-items: center; gap: 10px; color: var(--muted); margin-top: 12px; font-size: 14px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .note { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>exportfil-netto</h1>
+  <p class="sub">Upload an article export. Flags rows where the buy price looks wrong.</p>
+
+  <div class="card">
+    <div class="drop" id="drop">
+      <p><strong>Drop Excel file here</strong> or click to browse</p>
+      <p>.xlsx, .xls, .csv</p>
+      <input type="file" id="file" accept=".xlsx,.xls,.csv">
+    </div>
+    <div id="file-info" class="sub hidden" style="margin-top: 12px; margin-bottom: 0;"></div>
+    <div id="loading" class="loading hidden"><div class="spinner"></div><span id="loading-text">Reading file…</span></div>
+    <div id="error" class="error hidden"></div>
+  </div>
+
+  <div class="card hidden" id="results-card">
+    <div class="stats" id="stats"></div>
+    <div class="rules-bar">
+      <div class="field"><label>Buy below</label><input type="number" id="min-buy" value="1.50" step="0.01" min="0"></div>
+      <div class="field"><label>Margin above (%)</label><input type="number" id="max-margin" value="95" step="1" min="0" max="100"></div>
+      <label class="checkbox"><input type="checkbox" id="flag-inverted" checked> Flag buy &gt; sales</label>
+    </div>
+    <div id="display-note" class="note hidden"></div>
+    <div class="table-wrap" id="table-wrap"></div>
+    <div class="actions">
+      <button id="download">Download as Excel</button>
+      <button class="secondary" id="reset">Start over</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const FIELDS = ['ean', 'bnr', 'name', 'buy', 'sales'];
+const DISPLAY_CAP = 500;
+const AUTO_MAP = {
+  ean: ['ean', 'streckkod', 'barcode', 'gtin'],
+  bnr: ['bnr', 'b-nr', 'beställningsnr', 'bestnr', 'beställningsnummer', 'artikelnr', 'artikelnummer'],
+  name: ['produktnamn', 'artikelnamn', 'benämning', 'beskrivning', 'namn', 'product', 'name', 'description'],
+  buy: ['inköpspris', 'inkpris', 'köppris', 'inpris', 'buy', 'cost', 'purchase'],
+  sales: ['försäljningspris', 'säljpris', 'utpris', 'sales', 'sale', 'price', 'pris']
+};
+
+let headers = [];
+let rows = [];
+let rawRowCount = 0;
+let duplicatesRemoved = 0;
+let results = [];
+let sourceFilename = '';
+let storeName = '';
+let columnIdx = null;
+
+const drop = $('drop');
+const fileInput = $('file');
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drop.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function showError(msg) {
+  $('error').textContent = msg;
+  $('error').classList.remove('hidden');
+}
+function clearError() { $('error').classList.add('hidden'); }
+
+function handleFile(file) {
+  clearError();
+  sourceFilename = file.name.replace(/\.[^.]+$/, '');
+  $('file-info').classList.add('hidden');
+  $('results-card').classList.add('hidden');
+  setLoading(`Reading ${file.name}…`);
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const buf = new Uint8Array(e.target.result);
+    requestAnimationFrame(() => setTimeout(() => {
+      try {
+        setLoading('Parsing rows…');
+        const wb = XLSX.read(buf, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+        if (!json.length) { setLoading(null); showError('File appears empty.'); return; }
+
+        headers = json[0].map(h => String(h ?? '').trim());
+        const allRows = json.slice(1).filter(r => r.some(c => c !== '' && c != null));
+        rawRowCount = allRows.length;
+
+        columnIdx = autoMap();
+        const missing = FIELDS.filter(f => columnIdx[f] === -1);
+        if (missing.length) {
+          setLoading(null);
+          showError(`Could not auto-detect column(s): ${missing.join(', ')}. Headers found: ${headers.join(', ')}`);
+          return;
+        }
+
+        rows = dedupeRows(allRows, columnIdx);
+        duplicatesRemoved = rawRowCount - rows.length;
+
+        $('file-info').textContent = `${file.name} — ${rawRowCount.toLocaleString()} rows, ${headers.length} columns`;
+        $('file-info').classList.remove('hidden');
+
+        analyze();
+        setLoading(null);
+        downloadExcel();
+      } catch (err) {
+        setLoading(null);
+        showError('Could not read file: ' + err.message);
+      }
+    }, 0));
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function setLoading(msg) {
+  if (msg == null) { $('loading').classList.add('hidden'); return; }
+  $('loading-text').textContent = msg;
+  $('loading').classList.remove('hidden');
+}
+
+function dedupeRows(rows, idx) {
+  const seen = new Set();
+  const out = [];
+  for (const row of rows) {
+    const ean = String(row[idx.ean] ?? '').trim();
+    const bnr = String(row[idx.bnr] ?? '').trim();
+    const key = ean || bnr;
+    if (!key) { out.push(row); continue; }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
+function autoMap() {
+  const lower = headers.map(h => h.toLowerCase());
+  const idx = {};
+  for (const f of FIELDS) {
+    let i = -1;
+    for (const term of AUTO_MAP[f]) {
+      i = lower.findIndex(h => h.includes(term));
+      if (i !== -1) break;
+    }
+    idx[f] = i;
+  }
+  return idx;
+}
+
+function parseNum(v) {
+  if (typeof v === 'number') return v;
+  if (v == null || v === '') return NaN;
+  const s = String(v).replace(/\s|kr|sek/gi, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? NaN : n;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function analyze() {
+  if (!columnIdx) return;
+  const idx = columnIdx;
+
+  const minBuy = parseFloat($('min-buy').value);
+  const maxMargin = parseFloat($('max-margin').value);
+  const flagInverted = $('flag-inverted').checked;
+
+  results = [];
+
+  for (const row of rows) {
+    const buy = parseNum(row[idx.buy]);
+    const sales = parseNum(row[idx.sales]);
+    const margin = (!isNaN(buy) && !isNaN(sales) && sales > 0) ? (sales - buy) / sales * 100 : NaN;
+
+    const reasons = [];
+    if (isNaN(buy) || isNaN(sales)) reasons.push({ text: 'Missing price', level: 'warn' });
+    if (!isNaN(buy) && buy < minBuy) reasons.push({ text: `Buy < ${minBuy}`, level: 'warn' });
+    if (!isNaN(margin) && margin > maxMargin) reasons.push({ text: `Margin ${margin.toFixed(1)}%`, level: 'warn' });
+    if (flagInverted && !isNaN(buy) && !isNaN(sales) && buy > sales) {
+      reasons.push({ text: 'Buy > Sales', level: 'danger' });
+    }
+
+    if (reasons.length) {
+      results.push({
+        ean: row[idx.ean] ?? '',
+        bnr: row[idx.bnr] ?? '',
+        name: row[idx.name] ?? '',
+        buy, sales, margin, reasons
+      });
+    }
+  }
+
+  renderResults();
+}
+
+['min-buy', 'max-margin', 'flag-inverted'].forEach(id => {
+  $(id).addEventListener('change', analyze);
+});
+
+function renderResults() {
+  $('results-card').classList.remove('hidden');
+  const dupStat = duplicatesRemoved
+    ? `<div class="stat"><strong>${duplicatesRemoved.toLocaleString()}</strong><span class="muted">Duplicates removed</span></div>`
+    : '';
+  $('stats').innerHTML = `
+    <div class="stat"><strong>${results.length.toLocaleString()}</strong><span class="muted">Flagged articles</span></div>
+    <div class="stat"><strong>${rows.length.toLocaleString()}</strong><span class="muted">Unique articles</span></div>
+    ${dupStat}
+    <div class="stat"><strong>${(results.length / rows.length * 100 || 0).toFixed(1)}%</strong><span class="muted">Flag rate</span></div>
+  `;
+
+  if (!results.length) {
+    $('display-note').classList.add('hidden');
+    $('table-wrap').innerHTML = '<div class="empty">No anomalies found.</div>';
+    return;
+  }
+
+  const displayed = results.slice(0, DISPLAY_CAP);
+  if (results.length > DISPLAY_CAP) {
+    $('display-note').textContent = `Showing first ${DISPLAY_CAP.toLocaleString()} of ${results.length.toLocaleString()} flagged articles. Download to see all.`;
+    $('display-note').classList.remove('hidden');
+  } else {
+    $('display-note').classList.add('hidden');
+  }
+
+  const fmt = (n) => isNaN(n) ? '' : n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtPct = (n) => isNaN(n) ? '' : n.toFixed(1) + '%';
+  const rowsHtml = displayed.map(r => `
+    <tr>
+      <td>${escapeHtml(r.ean)}</td>
+      <td>${escapeHtml(r.bnr)}</td>
+      <td>${escapeHtml(r.name)}</td>
+      <td class="num">${fmt(r.buy)}</td>
+      <td class="num">${fmt(r.sales)}</td>
+      <td class="num">${fmtPct(r.margin)}</td>
+    </tr>
+  `).join('');
+  $('table-wrap').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>EAN</th><th>BNR</th><th>Product name</th>
+        <th style="text-align: right;">Buy</th><th style="text-align: right;">Sales</th><th style="text-align: right;">Margin</th>
+      </tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  `;
+}
+
+function downloadExcel() {
+  if (!results.length) return;
+  const data = results.map(r => ({
+    EAN: r.ean,
+    BNR: r.bnr,
+    'Product name': r.name,
+    'Buy price': isNaN(r.buy) ? '' : r.buy,
+    'Sales price': isNaN(r.sales) ? '' : r.sales,
+    'Margin (%)': isNaN(r.margin) ? '' : Math.round(r.margin * 10) / 10
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Netto');
+  const base = storeName || sourceFilename || 'exportfil-netto';
+  XLSX.writeFile(wb, `${base} netto.xlsx`);
+}
+
+$('download').addEventListener('click', downloadExcel);
+
+$('reset').addEventListener('click', () => {
+  headers = []; rows = []; results = []; columnIdx = null; storeName = '';
+  rawRowCount = 0; duplicatesRemoved = 0;
+  fileInput.value = '';
+  $('file-info').classList.add('hidden');
+  $('results-card').classList.add('hidden');
+  $('display-note').classList.add('hidden');
+  setLoading(null);
+  clearError();
+});
+</script>
+</body>
+</html>
