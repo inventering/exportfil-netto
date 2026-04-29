@@ -486,7 +486,7 @@ function saveRules() {
 function onRuleChange() { saveRules(); analyze(); }
 
 ['min-buy', 'min-margin', 'max-margin'].forEach(id => {
-  $(id).addEventListener('change', onRuleChange);
+  $(id).addEventListener('input', onRuleChange);
 });
 document.querySelectorAll('input[data-cat]').forEach(el => {
   el.addEventListener('change', onRuleChange);
