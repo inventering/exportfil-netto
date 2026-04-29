@@ -125,13 +125,23 @@
     <div id="error" class="error hidden"></div>
   </div>
 
-  <div class="card hidden" id="results-card">
-    <div class="stats" id="stats"></div>
+  <div class="card">
+    <h2>Rules</h2>
     <div class="rules-bar">
       <div class="field"><label>Buy below</label><input type="number" id="min-buy" value="1.50" step="0.01" min="0"></div>
+      <div class="field"><label>Margin below (%)</label><input type="number" id="min-margin" value="0" step="1" min="-100" max="100"></div>
       <div class="field"><label>Margin above (%)</label><input type="number" id="max-margin" value="95" step="1" min="0" max="100"></div>
-      <label class="checkbox"><input type="checkbox" id="flag-inverted" checked> Flag buy &gt; sales</label>
     </div>
+    <h2 style="margin-top: 4px;">Ignore categories</h2>
+    <div class="rules-bar" style="margin-bottom: 0;">
+      <label class="checkbox"><input type="checkbox" data-cat="338" checked> 338 — BÄRKASSAR</label>
+      <label class="checkbox"><input type="checkbox" data-cat="276" checked> 276 — PANT INLÖSEN</label>
+      <label class="checkbox"><input type="checkbox" data-cat="248" checked> 248 — PANT FÖRSÄLJNING</label>
+    </div>
+  </div>
+
+  <div class="card hidden" id="results-card">
+    <div class="stats" id="stats"></div>
     <div id="display-note" class="note hidden"></div>
     <div class="table-wrap" id="table-wrap"></div>
     <div class="actions">
@@ -146,17 +156,57 @@ const $ = (id) => document.getElementById(id);
 const FIELDS = ['ean', 'bnr', 'name', 'buy', 'sales'];
 const DISPLAY_CAP = 500;
 const AUTO_MAP = {
-  ean: ['ean', 'streckkod', 'barcode', 'gtin'],
+  ean: ['ean/plu', 'ean', 'streckkod', 'barcode', 'gtin', 'plu'],
   bnr: ['bnr', 'b-nr', 'beställningsnr', 'bestnr', 'beställningsnummer', 'artikelnr', 'artikelnummer'],
-  name: ['produktnamn', 'artikelnamn', 'benämning', 'beskrivning', 'namn', 'product', 'name', 'description'],
-  buy: ['inköpspris', 'inkpris', 'köppris', 'inpris', 'buy', 'cost', 'purchase'],
-  sales: ['försäljningspris', 'säljpris', 'utpris', 'sales', 'sale', 'price', 'pris']
+  name: ['benämning', 'produktnamn', 'artikelnamn', 'beskrivning', 'namn', 'product', 'name', 'description'],
+  buy: ['ink.pris', 'ink. pris', 'inköpspris', 'inkpris', 'köppris', 'inpris', 'buy', 'cost', 'purchase'],
+  sales: ['fsg. pris', 'fsg.pris', 'fsg', 'försäljningspris', 'säljpris', 'utpris', 'sales', 'sale', 'price', 'pris']
+};
+const KATEGORI_TERMS = ['kategori', 'category'];
+const CATEGORY_NAMES = {
+  208: "KYLD FISK&SKALDJURSKONSERV", 209: "SMÅMÅL MEJERI", 210: "VEGETABILISK MEJERI",
+  211: "GRÖNSAKSKONSERVER", 212: "BARNMAT", 213: "BAKNING", 214: "KAFFE, TE & CHOKLAD",
+  215: "FÄRSK FISK&SKALDJUR KFP", 216: "OKYLD JUICE & FRUKTDRYCK", 218: "FRUKTDRYCKER",
+  219: "MATFETT", 220: "ÄGG", 221: "FRYST FISK & SKALDJUR", 222: "MEJERI",
+  223: "ÖL, VIN OCH CIDER", 224: "GODIS", 225: "MJUKT MATBRÖD PACKAT",
+  226: "OST (KONSUMENTPACK)", 227: "GLASS", 228: "LÖSVIKTSGODIS",
+  229: "HÅRT BRÖD & MATKEX", 230: "GRÖNSAKER", 231: "FRUKT & BÄR",
+  232: "FÄRSKT KÖTT BUTIKSPACKAT", 233: "MATCHARK (KONSUMENTPACK)",
+  234: "FÄRDIGMAT (KONSUMENTPACK)", 236: "FIKABRÖD", 237: "FÄRSK FÅGEL",
+  238: "MANUELL CHARK", 239: "FÄRDIGMAT & FISKKONSERVER", 240: "FLINGOR & GRYN",
+  241: "PASTA & SÅS", 242: "KRYDDOR", 243: "HÄLSA", 244: "SNACKS",
+  245: "NATURGODIS LÖSVIKT", 247: "UTLÄNDSKA MATKONCEPT", 248: "PANT FÖRSÄLJNING",
+  249: "LÄSK OCH SAFT", 250: "MATÖVERKÄNSLIGHET", 252: "BUTIKSBAKAT BRÖD",
+  253: "OST (MANUELL)", 254: "OLJA VINÄGER", 255: "SMAKSÄTTNING",
+  256: "SYLT MOS MARMELAD", 257: "MELLANMÅL & EFTERRÄTTER",
+  258: "FÄRSKT KÖTT (KONSUMENTPACK)", 259: "FUNKTIONSDRYCKER",
+  261: "TILLBEHÖRSSALLADER", 262: "PÅLÄGGSCHARK (KONSUMENTPACK)",
+  264: "DELI (KONSUMENTPACK)", 265: "FRYST FÄRDIGLAGAT",
+  266: "FRYST GRÖNSAKER&POTATIS", 267: "FRYST FRUKT, BÄR&DESSERT",
+  268: "FRYST FÅGEL", 269: "VATTEN", 270: "BUTIKSGRILLAT MANUELLT",
+  275: "FÄRSKA VEG PROTEINER", 276: "PANT INLÖSEN", 311: "GASTRONOMI",
+  314: "HELG & FEST", 315: "FÖRVARING TVÄTT & STRY",
+  319: "TVÄTT- & SKÖLJMEDEL", 320: "BARNTILLBEHÖR", 321: "RENGÖRING",
+  322: "KROPPSVÅRD", 323: "TISSUE PAPPER", 325: "DJURMAT & TILLBEHÖR",
+  326: "MATEMBALLAGE", 327: "ANSIKTSVÅRD", 328: "MUNVÅRD MUNHYGIEN",
+  329: "HÅRVÅRD", 330: "INTIMHYGIEN", 331: "LJUS", 332: "SKRIV & KONTOR",
+  334: "TIDSKRIFTER", 335: "DAGSTIDNINGAR", 336: "LÄKEMEDEL RECEPTFRIA",
+  337: "GRATTISKORT & PRESENTPAPPER", 338: "BÄRKASSAR", 341: "LEKSAKER",
+  344: "CIGARETTER", 345: "SNUS", 351: "HÅRBORTTAGNING",
+  352: "PORTO/FÖRKÖPSHÄFTEN", 355: "SERVETTER&ENG.MATERIAL",
+  356: "BATTERIER&SÄKRINGAR", 357: "TELEKONTANTKORT",
+  358: "UPPLEVELSER&PRESENTKORT", 464: "CYKLAR", 513: "HOBBY SY & STICKA",
+  533: "LJUSKÄLLOR", 550: "BEKÄMPNING & REDSKAP", 553: "JORD, GÖDNING & VED",
+  559: "GRILLAR", 560: "SOMMARPLANTOR", 561: "TRÄDGÅRDSVÄXTER",
+  562: "BLOMMOR", 566: "KRUKOR"
 };
 
 let headers = [];
 let rows = [];
+let dedupedRows = [];
 let rawRowCount = 0;
 let duplicatesRemoved = 0;
+let ignoredByCategory = 0;
 let results = [];
 let sourceFilename = '';
 let storeName = '';
@@ -201,8 +251,10 @@ function handleFile(file) {
         const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
         if (!json.length) { setLoading(null); showError('File appears empty.'); return; }
 
-        headers = json[0].map(h => String(h ?? '').trim());
-        const allRows = json.slice(1).filter(r => r.some(c => c !== '' && c != null));
+        const layout = detectLayout(json);
+        storeName = layout.storeName;
+        headers = json[layout.headerRowIdx].map(h => String(h ?? '').trim());
+        const allRows = json.slice(layout.headerRowIdx + 1).filter(r => r.some(c => c !== '' && c != null));
         rawRowCount = allRows.length;
 
         columnIdx = autoMap();
@@ -213,10 +265,11 @@ function handleFile(file) {
           return;
         }
 
-        rows = dedupeRows(allRows, columnIdx);
-        duplicatesRemoved = rawRowCount - rows.length;
+        dedupedRows = dedupeRows(allRows, columnIdx);
+        duplicatesRemoved = rawRowCount - dedupedRows.length;
 
-        $('file-info').textContent = `${file.name} — ${rawRowCount.toLocaleString()} rows, ${headers.length} columns`;
+        const storeLabel = storeName ? ` — Butik: ${storeName}` : '';
+        $('file-info').textContent = `${file.name} — ${rawRowCount.toLocaleString()} rows, ${headers.length} columns${storeLabel}`;
         $('file-info').classList.remove('hidden');
 
         analyze();
@@ -252,6 +305,44 @@ function dedupeRows(rows, idx) {
   return out;
 }
 
+function detectLayout(json) {
+  const HEADER_TOKENS = ['bnr', 'ean', 'benämning', 'ink.pris', 'fsg. pris', 'fsg.pris', 'inköpspris', 'artikelnr'];
+  const limit = Math.min(json.length, 50);
+  let storeName = '';
+  let headerRowIdx = 0;
+
+  for (let i = 0; i < limit; i++) {
+    const row = json[i] || [];
+    for (let c = 0; c < row.length; c++) {
+      const cell = String(row[c] ?? '').trim().toLowerCase();
+      if (cell === 'butik:' || cell === 'butik') {
+        const next = String(row[c + 1] ?? '').trim();
+        if (next) { storeName = parseStoreName(next); break; }
+        for (let j = i + 1; j < Math.min(json.length, i + 5); j++) {
+          const v = String((json[j] || [])[c] ?? '').trim()
+                 || String((json[j] || [])[0] ?? '').trim();
+          if (v) { storeName = parseStoreName(v); break; }
+        }
+        break;
+      }
+    }
+    if (storeName) break;
+  }
+
+  for (let i = 0; i < limit; i++) {
+    const lower = (json[i] || []).map(c => String(c ?? '').trim().toLowerCase());
+    const hits = HEADER_TOKENS.filter(t => lower.some(c => c === t || c.includes(t))).length;
+    if (hits >= 2) { headerRowIdx = i; break; }
+  }
+
+  return { storeName, headerRowIdx };
+}
+
+function parseStoreName(s) {
+  const m = String(s).match(/^\s*\d+\s*[-–—]\s*(.+)$/);
+  return (m ? m[1] : s).trim();
+}
+
 function autoMap() {
   const lower = headers.map(h => h.toLowerCase());
   const idx = {};
@@ -263,7 +354,45 @@ function autoMap() {
     }
     idx[f] = i;
   }
+  let ki = -1;
+  for (const term of KATEGORI_TERMS) {
+    ki = lower.findIndex(h => h === term || h.includes(term));
+    if (ki !== -1) break;
+  }
+  idx.kategori = ki;
   return idx;
+}
+
+function parseCategory(v) {
+  if (typeof v === 'number') return Math.trunc(v);
+  if (v == null || v === '') return NaN;
+  const n = parseInt(String(v).trim(), 10);
+  return isNaN(n) ? NaN : n;
+}
+
+function formatCategory(k) {
+  if (k == null || isNaN(k)) return '';
+  const name = CATEGORY_NAMES[k];
+  return name ? `${k} - ${name}` : String(k);
+}
+
+function getActiveIgnoreSet() {
+  const set = new Set();
+  document.querySelectorAll('input[data-cat]:checked').forEach(el => {
+    const n = parseInt(el.dataset.cat, 10);
+    if (!isNaN(n)) set.add(n);
+  });
+  return set;
+}
+
+function applyCategoryFilter() {
+  const ignoreSet = getActiveIgnoreSet();
+  if (columnIdx && columnIdx.kategori !== -1 && ignoreSet.size) {
+    rows = dedupedRows.filter(r => !ignoreSet.has(parseCategory(r[columnIdx.kategori])));
+  } else {
+    rows = dedupedRows.slice();
+  }
+  ignoredByCategory = dedupedRows.length - rows.length;
 }
 
 function parseNum(v) {
@@ -280,25 +409,31 @@ function escapeHtml(s) {
 
 function analyze() {
   if (!columnIdx) return;
+  applyCategoryFilter();
   const idx = columnIdx;
 
   const minBuy = parseFloat($('min-buy').value);
+  const minMargin = parseFloat($('min-margin').value);
   const maxMargin = parseFloat($('max-margin').value);
-  const flagInverted = $('flag-inverted').checked;
 
   results = [];
 
   for (const row of rows) {
     const buy = parseNum(row[idx.buy]);
     const sales = parseNum(row[idx.sales]);
-    const margin = (!isNaN(buy) && !isNaN(sales) && sales > 0) ? (sales - buy) / sales * 100 : NaN;
+    const validPrices = !isNaN(buy) && !isNaN(sales);
+    const margin = (validPrices && sales > 0) ? (sales - buy) / sales * 100 : NaN;
 
     const reasons = [];
-    if (isNaN(buy) || isNaN(sales)) reasons.push({ text: 'Missing price', level: 'warn' });
+    if (!validPrices) reasons.push({ text: 'Missing price', level: 'warn' });
     if (!isNaN(buy) && buy < minBuy) reasons.push({ text: `Buy < ${minBuy}`, level: 'warn' });
-    if (!isNaN(margin) && margin > maxMargin) reasons.push({ text: `Margin ${margin.toFixed(1)}%`, level: 'warn' });
-    if (flagInverted && !isNaN(buy) && !isNaN(sales) && buy > sales) {
-      reasons.push({ text: 'Buy > Sales', level: 'danger' });
+    if (validPrices && sales <= 0 && buy > 0) {
+      reasons.push({ text: 'Sales ≤ 0', level: 'danger' });
+    } else if (!isNaN(margin) && !isNaN(minMargin) && margin < minMargin) {
+      reasons.push({ text: `Margin ${margin.toFixed(1)}%`, level: margin < 0 ? 'danger' : 'warn' });
+    }
+    if (!isNaN(margin) && !isNaN(maxMargin) && margin > maxMargin) {
+      reasons.push({ text: `Margin ${margin.toFixed(1)}%`, level: 'warn' });
     }
 
     if (reasons.length) {
@@ -306,6 +441,7 @@ function analyze() {
         ean: row[idx.ean] ?? '',
         bnr: row[idx.bnr] ?? '',
         name: row[idx.name] ?? '',
+        kategori: idx.kategori !== -1 ? parseCategory(row[idx.kategori]) : NaN,
         buy, sales, margin, reasons
       });
     }
@@ -314,19 +450,63 @@ function analyze() {
   renderResults();
 }
 
-['min-buy', 'max-margin', 'flag-inverted'].forEach(id => {
-  $(id).addEventListener('change', analyze);
+const RULES_STORAGE_KEY = 'exportfil-netto:rules';
+
+function loadRules() {
+  try {
+    const raw = localStorage.getItem(RULES_STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (Number.isFinite(saved.minBuy)) $('min-buy').value = saved.minBuy;
+    if (Number.isFinite(saved.minMargin)) $('min-margin').value = saved.minMargin;
+    if (Number.isFinite(saved.maxMargin)) $('max-margin').value = saved.maxMargin;
+    if (saved.ignored && typeof saved.ignored === 'object') {
+      document.querySelectorAll('input[data-cat]').forEach(el => {
+        if (el.dataset.cat in saved.ignored) el.checked = !!saved.ignored[el.dataset.cat];
+      });
+    }
+  } catch {}
+}
+
+function saveRules() {
+  try {
+    const ignored = {};
+    document.querySelectorAll('input[data-cat]').forEach(el => {
+      ignored[el.dataset.cat] = el.checked;
+    });
+    localStorage.setItem(RULES_STORAGE_KEY, JSON.stringify({
+      minBuy: parseFloat($('min-buy').value),
+      minMargin: parseFloat($('min-margin').value),
+      maxMargin: parseFloat($('max-margin').value),
+      ignored,
+    }));
+  } catch {}
+}
+
+function onRuleChange() { saveRules(); analyze(); }
+
+['min-buy', 'min-margin', 'max-margin'].forEach(id => {
+  $(id).addEventListener('change', onRuleChange);
 });
+document.querySelectorAll('input[data-cat]').forEach(el => {
+  el.addEventListener('change', onRuleChange);
+});
+
+loadRules();
 
 function renderResults() {
   $('results-card').classList.remove('hidden');
   const dupStat = duplicatesRemoved
     ? `<div class="stat"><strong>${duplicatesRemoved.toLocaleString()}</strong><span class="muted">Duplicates removed</span></div>`
     : '';
+  const ignoredStat = ignoredByCategory
+    ? `<div class="stat"><strong>${ignoredByCategory.toLocaleString()}</strong><span class="muted">Ignored by category</span></div>`
+    : '';
   $('stats').innerHTML = `
     <div class="stat"><strong>${results.length.toLocaleString()}</strong><span class="muted">Flagged articles</span></div>
     <div class="stat"><strong>${rows.length.toLocaleString()}</strong><span class="muted">Unique articles</span></div>
     ${dupStat}
+    ${ignoredStat}
     <div class="stat"><strong>${(results.length / rows.length * 100 || 0).toFixed(1)}%</strong><span class="muted">Flag rate</span></div>
   `;
 
@@ -351,6 +531,7 @@ function renderResults() {
       <td>${escapeHtml(r.ean)}</td>
       <td>${escapeHtml(r.bnr)}</td>
       <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(formatCategory(r.kategori))}</td>
       <td class="num">${fmt(r.buy)}</td>
       <td class="num">${fmt(r.sales)}</td>
       <td class="num">${fmtPct(r.margin)}</td>
@@ -359,7 +540,7 @@ function renderResults() {
   $('table-wrap').innerHTML = `
     <table>
       <thead><tr>
-        <th>EAN</th><th>BNR</th><th>Product name</th>
+        <th>EAN</th><th>BNR</th><th>Product name</th><th>Category</th>
         <th style="text-align: right;">Buy</th><th style="text-align: right;">Sales</th><th style="text-align: right;">Margin</th>
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
@@ -369,16 +550,32 @@ function renderResults() {
 
 function downloadExcel() {
   if (!results.length) return;
+  const eanStr = (v) => (v === '' || v == null) ? '' : String(v).replace(/\.0+$/, '');
   const data = results.map(r => ({
-    EAN: r.ean,
-    BNR: r.bnr,
+    EAN: eanStr(r.ean),
+    BNR: eanStr(r.bnr),
     'Product name': r.name,
+    'Category': formatCategory(r.kategori),
     'Buy price': isNaN(r.buy) ? '' : r.buy,
     'Sales price': isNaN(r.sales) ? '' : r.sales,
     'Margin (%)': isNaN(r.margin) ? '' : Math.round(r.margin * 10) / 10
   }));
   const ws = XLSX.utils.json_to_sheet(data);
-  ws['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 40 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+  ws['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 40 }, { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let R = range.s.r + 1; R <= range.e.r; R++) {
+    for (const C of [0, 1]) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = ws[addr];
+      if (cell && cell.v !== '' && cell.v != null) {
+        cell.t = 's';
+        cell.v = String(cell.v);
+        cell.z = '@';
+      }
+    }
+  }
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Netto');
   const base = storeName || sourceFilename || 'exportfil-netto';
@@ -388,8 +585,8 @@ function downloadExcel() {
 $('download').addEventListener('click', downloadExcel);
 
 $('reset').addEventListener('click', () => {
-  headers = []; rows = []; results = []; columnIdx = null; storeName = '';
-  rawRowCount = 0; duplicatesRemoved = 0;
+  headers = []; rows = []; dedupedRows = []; results = []; columnIdx = null; storeName = '';
+  rawRowCount = 0; duplicatesRemoved = 0; ignoredByCategory = 0;
   fileInput.value = '';
   $('file-info').classList.add('hidden');
   $('results-card').classList.add('hidden');
