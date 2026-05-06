@@ -163,6 +163,7 @@ const AUTO_MAP = {
   sales: ['fsg. pris', 'fsg.pris', 'fsg', 'försäljningspris', 'säljpris', 'utpris', 'sales', 'sale', 'price', 'pris']
 };
 const KATEGORI_TERMS = ['kategori', 'category'];
+const QTY_TERMS = ['sålt antal', 'salt antal', 'sålda', 'salda', 'antal sålda', 'antal salda', 'antal', 'kvantitet', 'mängd', 'mangd', 'quantity', 'qty', 'sold'];
 const CATEGORY_NAMES = {
   208: "KYLD FISK&SKALDJURSKONSERV", 209: "SMÅMÅL MEJERI", 210: "VEGETABILISK MEJERI",
   211: "GRÖNSAKSKONSERVER", 212: "BARNMAT", 213: "BAKNING", 214: "KAFFE, TE & CHOKLAD",
@@ -291,16 +292,30 @@ function setLoading(msg) {
 }
 
 function dedupeRows(rows, idx) {
-  const seen = new Set();
+  const seen = new Map();
   const out = [];
+  const hasQty = idx.qty !== -1;
   for (const row of rows) {
     const ean = String(row[idx.ean] ?? '').trim();
     const bnr = String(row[idx.bnr] ?? '').trim();
     const key = ean || bnr;
     if (!key) { out.push(row); continue; }
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(row);
+    if (seen.has(key)) {
+      if (hasQty) {
+        const existing = seen.get(key);
+        const prev = parseNum(existing[idx.qty]);
+        const add = parseNum(row[idx.qty]);
+        existing[idx.qty] = (isNaN(prev) ? 0 : prev) + (isNaN(add) ? 0 : add);
+      }
+      continue;
+    }
+    const copy = hasQty ? row.slice() : row;
+    if (hasQty) {
+      const n = parseNum(copy[idx.qty]);
+      copy[idx.qty] = isNaN(n) ? 0 : n;
+    }
+    seen.set(key, copy);
+    out.push(copy);
   }
   return out;
 }
@@ -360,6 +375,12 @@ function autoMap() {
     if (ki !== -1) break;
   }
   idx.kategori = ki;
+  let qi = -1;
+  for (const term of QTY_TERMS) {
+    qi = lower.findIndex(h => h === term || h.includes(term));
+    if (qi !== -1) break;
+  }
+  idx.qty = qi;
   return idx;
 }
 
@@ -442,6 +463,7 @@ function analyze() {
         bnr: row[idx.bnr] ?? '',
         name: row[idx.name] ?? '',
         kategori: idx.kategori !== -1 ? parseCategory(row[idx.kategori]) : NaN,
+        qty: idx.qty !== -1 ? parseNum(row[idx.qty]) : NaN,
         buy, sales, margin, reasons
       });
     }
@@ -526,12 +548,16 @@ function renderResults() {
 
   const fmt = (n) => isNaN(n) ? '' : n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtPct = (n) => isNaN(n) ? '' : n.toFixed(1) + '%';
+  const fmtQty = (n) => isNaN(n) ? '' : n.toLocaleString('sv-SE');
+  const hasQty = columnIdx && columnIdx.qty !== -1;
+  const qtyHead = hasQty ? '<th style="text-align: right;">Qty</th>' : '';
   const rowsHtml = displayed.map(r => `
     <tr>
       <td>${escapeHtml(r.ean)}</td>
       <td>${escapeHtml(r.bnr)}</td>
       <td>${escapeHtml(r.name)}</td>
       <td>${escapeHtml(formatCategory(r.kategori))}</td>
+      ${hasQty ? `<td class="num">${fmtQty(r.qty)}</td>` : ''}
       <td class="num">${fmt(r.buy)}</td>
       <td class="num">${fmt(r.sales)}</td>
       <td class="num">${fmtPct(r.margin)}</td>
@@ -541,6 +567,7 @@ function renderResults() {
     <table>
       <thead><tr>
         <th>EAN</th><th>BNR</th><th>Product name</th><th>Category</th>
+        ${qtyHead}
         <th style="text-align: right;">Buy</th><th style="text-align: right;">Sales</th><th style="text-align: right;">Margin</th>
       </tr></thead>
       <tbody>${rowsHtml}</tbody>
@@ -551,17 +578,25 @@ function renderResults() {
 function downloadExcel() {
   if (!results.length) return;
   const eanStr = (v) => (v === '' || v == null) ? '' : String(v).replace(/\.0+$/, '');
-  const data = results.map(r => ({
-    EAN: eanStr(r.ean),
-    BNR: eanStr(r.bnr),
-    'Product name': r.name,
-    'Category': formatCategory(r.kategori),
-    'Buy price': isNaN(r.buy) ? '' : r.buy,
-    'Sales price': isNaN(r.sales) ? '' : r.sales,
-    'Margin (%)': isNaN(r.margin) ? '' : Math.round(r.margin * 10) / 10
-  }));
+  const hasQty = columnIdx && columnIdx.qty !== -1;
+  const data = results.map(r => {
+    const row = {
+      EAN: eanStr(r.ean),
+      BNR: eanStr(r.bnr),
+      'Product name': r.name,
+      'Category': formatCategory(r.kategori),
+    };
+    if (hasQty) row['Quantity'] = isNaN(r.qty) ? '' : r.qty;
+    row['Buy price'] = isNaN(r.buy) ? '' : r.buy;
+    row['Sales price'] = isNaN(r.sales) ? '' : r.sales;
+    row['Margin (%)'] = isNaN(r.margin) ? '' : Math.round(r.margin * 10) / 10;
+    return row;
+  });
   const ws = XLSX.utils.json_to_sheet(data);
-  ws['!cols'] = [{ wch: 16 }, { wch: 12 }, { wch: 40 }, { wch: 28 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+  const cols = [{ wch: 16 }, { wch: 12 }, { wch: 40 }, { wch: 28 }];
+  if (hasQty) cols.push({ wch: 10 });
+  cols.push({ wch: 12 }, { wch: 12 }, { wch: 12 });
+  ws['!cols'] = cols;
 
   const range = XLSX.utils.decode_range(ws['!ref']);
   for (let R = range.s.r + 1; R <= range.e.r; R++) {
