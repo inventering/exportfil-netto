@@ -128,7 +128,7 @@
   <div class="card">
     <h2>Rules</h2>
     <div class="rules-bar">
-      <div class="field"><label>Buy below</label><input type="number" id="min-buy" value="1.50" step="0.01" min="0"></div>
+      <div class="field"><label>Buy below</label><input type="number" id="min-buy" value="1" step="0.01" min="0"></div>
       <div class="field"><label>Margin below (%)</label><input type="number" id="min-margin" value="0" step="1" min="-100" max="100"></div>
       <div class="field"><label>Margin above (%)</label><input type="number" id="max-margin" value="95" step="1" min="0" max="100"></div>
     </div>
@@ -164,6 +164,7 @@ const AUTO_MAP = {
 };
 const KATEGORI_TERMS = ['kategori', 'category'];
 const QTY_TERMS = ['sålt antal', 'salt antal', 'sålda', 'salda', 'antal sålda', 'antal salda', 'antal', 'kvantitet', 'mängd', 'mangd', 'quantity', 'qty', 'sold'];
+const BRAND_TERMS = ['varumärke', 'varumarke', 'brand', 'märke', 'marke'];
 const CATEGORY_NAMES = {
   208: "KYLD FISK&SKALDJURSKONSERV", 209: "SMÅMÅL MEJERI", 210: "VEGETABILISK MEJERI",
   211: "GRÖNSAKSKONSERVER", 212: "BARNMAT", 213: "BAKNING", 214: "KAFFE, TE & CHOKLAD",
@@ -381,6 +382,12 @@ function autoMap() {
     if (qi !== -1) break;
   }
   idx.qty = qi;
+  let bi = -1;
+  for (const term of BRAND_TERMS) {
+    bi = lower.findIndex(h => h === term || h.includes(term));
+    if (bi !== -1) break;
+  }
+  idx.brand = bi;
   return idx;
 }
 
@@ -462,6 +469,7 @@ function analyze() {
         ean: row[idx.ean] ?? '',
         bnr: row[idx.bnr] ?? '',
         name: row[idx.name] ?? '',
+        brand: idx.brand !== -1 ? (row[idx.brand] ?? '') : '',
         kategori: idx.kategori !== -1 ? parseCategory(row[idx.kategori]) : NaN,
         qty: idx.qty !== -1 ? parseNum(row[idx.qty]) : NaN,
         buy, sales, margin, reasons
@@ -550,12 +558,15 @@ function renderResults() {
   const fmtPct = (n) => isNaN(n) ? '' : n.toFixed(1) + '%';
   const fmtQty = (n) => isNaN(n) ? '' : n.toLocaleString('sv-SE');
   const hasQty = columnIdx && columnIdx.qty !== -1;
+  const hasBrand = columnIdx && columnIdx.brand !== -1;
   const qtyHead = hasQty ? '<th style="text-align: right;">Qty</th>' : '';
+  const brandHead = hasBrand ? '<th>Brand</th>' : '';
   const rowsHtml = displayed.map(r => `
     <tr>
       <td>${escapeHtml(r.ean)}</td>
       <td>${escapeHtml(r.bnr)}</td>
       <td>${escapeHtml(r.name)}</td>
+      ${hasBrand ? `<td>${escapeHtml(r.brand)}</td>` : ''}
       <td>${escapeHtml(formatCategory(r.kategori))}</td>
       ${hasQty ? `<td class="num">${fmtQty(r.qty)}</td>` : ''}
       <td class="num">${fmt(r.buy)}</td>
@@ -566,7 +577,7 @@ function renderResults() {
   $('table-wrap').innerHTML = `
     <table>
       <thead><tr>
-        <th>EAN</th><th>BNR</th><th>Product name</th><th>Category</th>
+        <th>EAN</th><th>BNR</th><th>Product name</th>${brandHead}<th>Category</th>
         ${qtyHead}
         <th style="text-align: right;">Buy</th><th style="text-align: right;">Sales</th><th style="text-align: right;">Margin</th>
       </tr></thead>
@@ -579,13 +590,15 @@ function downloadExcel() {
   if (!results.length) return;
   const eanStr = (v) => (v === '' || v == null) ? '' : String(v).replace(/\.0+$/, '');
   const hasQty = columnIdx && columnIdx.qty !== -1;
+  const hasBrand = columnIdx && columnIdx.brand !== -1;
   const data = results.map(r => {
     const row = {
       EAN: eanStr(r.ean),
       BNR: eanStr(r.bnr),
       'Product name': r.name,
-      'Category': formatCategory(r.kategori),
     };
+    if (hasBrand) row['Brand'] = r.brand;
+    row['Category'] = formatCategory(r.kategori);
     if (hasQty) row['Quantity'] = isNaN(r.qty) ? '' : r.qty;
     row['Buy price'] = isNaN(r.buy) ? '' : r.buy;
     row['Sales price'] = isNaN(r.sales) ? '' : r.sales;
@@ -593,7 +606,9 @@ function downloadExcel() {
     return row;
   });
   const ws = XLSX.utils.json_to_sheet(data);
-  const cols = [{ wch: 16 }, { wch: 12 }, { wch: 40 }, { wch: 28 }];
+  const cols = [{ wch: 16 }, { wch: 12 }, { wch: 40 }];
+  if (hasBrand) cols.push({ wch: 20 });
+  cols.push({ wch: 28 });
   if (hasQty) cols.push({ wch: 10 });
   cols.push({ wch: 12 }, { wch: 12 }, { wch: 12 });
   ws['!cols'] = cols;
